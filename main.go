@@ -13,44 +13,28 @@ const (
 )
 
 func main() {
-	connectMemcached()
+	redis := cache.Redis{Addr: "127.0.0.1:6380"}
+	ctx := context.Background()
+	writeCache(ctx, redis)
+
+	memcacheCtx := context.Background()
+	memcached := cache.Memcached{Addr: fmt.Sprintf("127.0.0.1:%v", memcachedPort)}
+	writeCache(memcacheCtx, memcached)
 }
 
-func connectCache(ctx context.Context, c cache.Cacher, addr string) {
-	c.NewClient()
-	if err := c.Healthy(ctx); err != nil {
+func writeCache(ctx context.Context, c cache.Cacher) {
+	client := c.NewClient()
+	if err := client.Healthy(ctx); err != nil {
 		log.Fatal(err)
 	}
-}
-
-func redisOperations(c *cache.Redis) {
-	redis := cache.Redis{Addr: "127.0.0.1:6380"}
-	redis = *redis.NewClient()
-	ctx := context.Background()
-
-	// Ping redis
-	if err := c.Healthy(ctx); err != nil {
-		log.Fatalf("unable to initiate connection with redis: %v. is redis connection open?", err)
+	cacheName := client.GetName()
+	// Ping cache
+	if err := client.Healthy(ctx); err != nil {
+		log.Fatalf("unable to initiate connection with %s: %v. is %s connection open?", cacheName, err, cacheName)
 	}
 
-	val := c.GetItem(&ctx, "fsd")
+	val := client.GetItem(&ctx, "fsd")
 	fmt.Println(val)
-	c.SetItem(ctx, "fruit", "peaches")
-	fmt.Println(c.GetItem(&ctx, "fruit"))
-}
-
-func connectMemcached() {
-	memcached := cache.Memcached{Addr: fmt.Sprintf("127.0.0.1:%v", memcachedPort)}
-	memcached = *memcached.NewClient()
-
-	// ctx := context.Background()
-	c := memcached.NewClient()
-
-	// Ping memcached server
-	if err := c.Healthy(); err != nil {
-		log.Fatalf("unable to initiate connection with memached: %v", err)
-	}
-	c.SetItem("bob", "jones")
-	fmt.Println(c.GetItem("bob"))
-
+	client.SetItem(ctx, "fruit", "peaches")
+	fmt.Println(client.GetItem(&ctx, "fruit"))
 }

@@ -13,15 +13,15 @@ import (
 
 type Client struct {
 	Cacher
-	log *log.Logger
 }
 
 type Cacher interface {
-	NewClient() *Client
+	NewClient() Cacher
+	GetName() string
 	NewLogger() *log.Logger
 	Healthy(ctx context.Context) error
 	GetItem(ctx *context.Context, key string) string
-	SetItem()
+	SetItem(ctx context.Context, key string, val interface{})
 }
 
 type Redis struct {
@@ -44,18 +44,23 @@ type Memcached struct {
 // 	}
 // }
 
-func (r Redis) NewClient() *Redis {
+func (r Redis) NewClient() Cacher {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     r.Addr,
 		Password: r.pass, // no password set
 		DB:       0,      // use default DB
 	})
-	return &Redis{
+
+	return Redis{
 		rdb,
 		r.NewLogger(),
 		r.Addr,
 		r.pass,
 	}
+}
+
+func (r Redis) GetName() string {
+	return "redis"
 }
 
 func (r Redis) NewLogger() *log.Logger {
@@ -111,23 +116,27 @@ func (r *Redis) setItem(ctx context.Context, key string, value interface{}) erro
 }
 
 // memcached
-
-func (m Memcached) NewClient() *Memcached {
+func (m Memcached) NewClient() Cacher {
 	return &Memcached{
 		memcache.New(m.Addr),
 		m.NewLogger(),
 		m.Addr,
 	}
 }
+
+func (m Memcached) GetName() string {
+	return "memcached"
+}
+
 func (m Memcached) NewLogger() *log.Logger {
 	return log.New(os.Stderr, "memcached: ", 0)
 }
 
-func (m Memcached) Healthy() error {
+func (m Memcached) Healthy(ctx context.Context) error {
 	return m.Ping()
 }
 
-func (m Memcached) GetItem(key string) string {
+func (m Memcached) GetItem(ctx *context.Context, key string) string {
 	// m.log.Printf("get key %s", key)
 	item, err := m.getItem(key)
 	if err != nil {
@@ -137,9 +146,9 @@ func (m Memcached) GetItem(key string) string {
 	return item
 }
 
-func (c Memcached) SetItem(key, val string) {
+func (c Memcached) SetItem(ctx context.Context, key string, value interface{}) {
 	// c.log.Printf("writing to key %q", key)
-	c.setItem(key, val)
+	c.setItem(key, value)
 }
 
 func (m *Memcached) getItem(key string) (string, error) {
@@ -151,8 +160,8 @@ func (m *Memcached) getItem(key string) (string, error) {
 	return string(item.Value), nil
 }
 
-func (m *Memcached) setItem(key string, val string) error {
-	if err := m.Set(&memcache.Item{Key: key, Value: []byte(val)}); err != nil {
+func (m *Memcached) setItem(key string, val interface{}) error {
+	if err := m.Set(&memcache.Item{Key: key, Value: []byte(val.(string))}); err != nil {
 		return fmt.Errorf("writing to key %q %v", key, err)
 	}
 
