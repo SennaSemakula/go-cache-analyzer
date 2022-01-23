@@ -69,7 +69,7 @@ func (r Redis) NewLogger() *log.Logger {
 
 func (r Redis) Healthy(ctx context.Context) error {
 	if _, err := r.Ping(ctx).Result(); err != nil {
-		return err
+		return fmt.Errorf("unable to initiate connection with %s: %v. is %s connection open?", r.GetName(), err, r.GetName())
 	}
 	return nil
 }
@@ -133,7 +133,10 @@ func (m Memcached) NewLogger() *log.Logger {
 }
 
 func (m Memcached) Healthy(ctx context.Context) error {
-	return m.Ping()
+	if err := m.Ping(); err != nil {
+		return fmt.Errorf("unable to initiate connection with %s: %v. is %s connection open?", m.GetName(), err, m.GetName())
+	}
+	return nil
 }
 
 func (m Memcached) GetItem(ctx *context.Context, key string) string {
